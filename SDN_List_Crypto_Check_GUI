@@ -1,0 +1,142 @@
+#!/Users/username/path_to_venv_/bin/python
+
+import pandas as pd
+import tkinter as tk
+import sys
+from tkinter.ttk import *
+import requests
+import datetime
+
+class Application(tk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.master = master
+        self.pack()
+        self.create_widgets()
+
+    def create_widgets(self):
+        # SDN List Scrape for Crypto Addresses
+        self.SDN = tk.Button(self, fg="orange")
+        self.SDN["text"] = "SDN"
+        self.SDN["command"] = self.check_list
+        self.SDN.grid(row = 0, column = 0, ipadx = 5, ipady = 5,
+                      padx = 5, pady = 5)
+        # QUIT
+        self.quit = tk.Button(self, text="QUIT", fg="red",
+                              command=self.master.destroy)
+        self.quit.grid(row = 1, column = 0, ipadx = 5, ipady = 5,
+                       padx = 5, pady = 5)
+        # LABEL
+        self.label1 = tk.Label(self)
+        txt1 = "CHECK SDN LIST FOR CRYPTO ADDRESSES"
+        self.label1["text"] = txt1
+        self.label1.grid(row = 0, column = 1)
+        txt2 = "NOTE: Click on the Textbox before pressing the SDN button (so you can copy/paste)"
+        self.label2 = tk.Label(self)
+        self.label2["text"] = txt2
+        self.label2.grid(row = 1, column = 1)
+        # TEXT DISPLAY
+        self.text = tk.Text(self, wrap="word")
+        self.text.grid(row = 3, column = 1,
+                       ipadx = 50, ipady = 100,
+                       padx = 10, pady = 10)
+        self.text.tag_configure("stderr", foreground="#b22222")
+
+        sys.stdout = TextRedirector(self.text, "stdout")
+        # sys.stderr = TextRedirector(self.text, "stderr")
+        
+    def check_list(self):
+        '''
+563. What is the structure of a digital currency address on OFAC’s SDN List?
+
+Digital currency addresses listed on the SDN List include their unique
+alphanumeric identifier (up to 256 characters) and identify the digital
+currency to which the address corresponds (e.g., Bitcoin (XBT), Ethereum
+(ETH), Litecoin (LTC), Neo (NEO), Dash (DASH), Ripple (XRP), Iota (MIOTA),
+Monero (XMR), and Petro (PTR)). Each digital currency address listed on the SDN
+list will have its own field: the structure will always begin with “Digital
+Currency Address”, followed by a dash and the digital currency’s symbol 
+(e.g., “Digital Currency Address - XBT”, “Digital Currency Address - ETH”).
+This information is followed by the unique alphanumeric identifier of the
+specific address. [06-06-2018]
+        '''
+
+        # Use requests to pull data from SDN List csv hosted online,
+        # keep in string var
+        r = requests.get('https://www.treasury.gov/ofac/downloads/sdn.csv')
+        string = r.text
+
+        # Accumulation list is outside of the function
+        # and passed into the so that it's not overwritten
+        address_list = []
+
+        # Call the function we wrote above,
+        # and create a dataframe with returned data
+        find_coin_address(string, address_list)
+        df = pd.DataFrame(address_list, columns=['Coin', 'Address'])
+
+        # A list of all the coins talked about on the FAQ (563.)
+        # copied at the top
+        SDN_coins = [
+            ["XBT", "Bitcoin"],
+            ["ETH", "Ethereum"],
+            ["LTC", "Litecoin"],
+            ["NEO", "NEO"],
+            ["DASH", "DASH"],
+            ["XRP", "Ripple"],
+            ["MIOTA", "IOTA"],
+            ["XMR", "Monero"],
+            ["PTR", "Petro"]
+        ]
+
+        # Loop through the SDN_coins list above,
+        # and print how many of each on SDN List
+        for coin in SDN_coins:
+            if len(df[df['Coin'] == coin[0]]) > 0:
+                print_item = str(len(df[df['Coin'] == coin[0]])) + " "
+                print_item = print_item + coin[1] + " "
+                print_item = print_item + "addresses on the SDN List\n"
+                sys.stdout.write(print_item)
+
+        # Get date, and export dataframe as CSV
+        date = str(datetime.date.today())
+        csv = 'OFAC_BTC_ADDRESS_CHECK_' + date + '.csv'
+        df_csv = df.to_csv(csv, index=False)
+        
+def find_coin_address(string, address_list):
+    
+    # In explaining the structure of digital currency addresses on OFAC SDN List
+    # it is said that the structure will always begin with:
+    # “Digital Currency Address”
+    # Thus, we will use this as our indicator when parsing through the List
+    indicator = "Digital Currency Address - "
+    
+    if indicator in string:
+        location = string.find(indicator)
+        coin = string[location + len(indicator):].split()[0]
+        address = string[location + len(indicator):].split()[1]
+        address = address[0:len(address)-1]
+        print_item = coin + " " + address + "\n"
+        sys.stdout.write(print_item)
+        pair = [coin, address]
+        address_list.append(pair)
+        string = string[location + len(indicator):]
+        find_coin_address(string, address_list)
+    else:
+        sys.stdout.write("\n")
+        
+class TextRedirector(object):
+    def __init__(self, widget, tag="stdout"):
+        self.widget = widget
+        self.tag = tag
+
+    def write(self, str):
+        self.widget.configure(state="normal")
+        self.widget.insert("end", str, (self.tag,))
+        self.widget.configure(state="disabled")
+        
+root = tk.Tk()
+root_top = tk.Frame(root)
+root_bottom = tk.Frame(root)
+app = Application(master=root)
+app.mainloop()
